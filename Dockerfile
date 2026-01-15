@@ -2,7 +2,15 @@
 FROM python:3.12-slim
 
 # Set the working directory in the container
+# Set the working directory in the container
 WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the file from your host to your current location.
 COPY requirements.txt .
