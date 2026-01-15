@@ -90,11 +90,13 @@ def process_emails(client, llm, config, target_email, specific_message_id=None):
         if is_actionable:
             title = task_title if task_title else f"Follow up: {subject}"
             content = f"Source Email: {subject}\nSummary: {analysis.get('summary')}"
+            due_date = analysis.get('due_date')
             
             # List name corresponds to folder name (if categorized), else None (default list)
-            list_name = folder_name if folder_name else None
+            # Use only the leaf folder name (e.g. "DIA" from "Reader/DIA")
+            list_name = folder_name.split('/')[-1] if folder_name else None
             
-            client.create_todo_task(target_email, title, content, list_name=list_name)
+            client.create_todo_task(target_email, title, content, list_name=list_name, due_date=due_date)
 
 import uvicorn
 import threading

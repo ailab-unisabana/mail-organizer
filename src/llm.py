@@ -128,6 +128,7 @@ class LLMProcessor:
             "category": "category_name_or_null",
             "is_actionable": boolean,
             "task_title": "string or null",
+            "due_date": "YYYY-MM-DD or null",
             "summary": "short summary including insight from images if relevant"
         }}
         """
@@ -189,5 +190,6 @@ class LLMProcessor:
                 "category": "Important",
                 "is_actionable": False,
                 "task_title": None,
+                "due_date": None,
                 "summary": "Error analyzing email (LLM failure)."
             }

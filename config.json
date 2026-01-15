@@ -44,12 +44,18 @@
       "name": "Teams",
       "description": "Correos electrónicos que corresponden a notificaciones de actividad en Microsoft Teams",
       "folder_name": "Reader/Teams"
+    },
+    {
+      "name": "Quarantine",
+      "description": "These are the mails coming from the Quarantine service of Outlook notifying that some messages have been blocked and quarantined.",
+      "folder_name": "Reader/Quarantine"
     }
   ],
   "llm_instructions": [
     "You are an intelligent email assistant.",
     "Analyze the submitted email (text + image descriptions) and categorize it into ONE of the provided categories.",
-    "Determine if it requires action. Extract a task title if so."
+    "Determine if it requires action. Extract a task title if so.",
+    "If the email contains a specific deadline or due date, extract it as 'due_date' in YYYY-MM-DD format. If no date is mentioned, set it to null."
   ],
   "polling_interval_seconds": 60
 }

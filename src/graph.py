@@ -179,11 +179,12 @@ class GraphClient:
                 logger.error("HINT: Ensure the App has 'Tasks.ReadWrite.All' Application Permission in Azure Portal.")
             return None
 
-    def create_todo_task(self, user_email, title, content, list_name=None):
+    def create_todo_task(self, user_email, title, content, list_name=None, due_date=None):
         """
         Creates a task in a specific list. 
         If list_name is provided, it tries to find/create that list.
         Otherwise falls back to default.
+        due_date: Optional string in YYYY-MM-DD format.
         """
         list_id = None
         
@@ -209,6 +210,32 @@ class GraphClient:
                 "contentType": "text"
             }
         }
+        
+        if due_date:
+            # Graph API expects 'dueDateTime': {'dateTime': '...', 'timeZone': '...'}
+            # We append a default time (e.g., end of day or noon) or just date if supported.
+            # To Do tasks usually just have a date. 
+            # Format: YYYY-MM-DDT09:00:00 (Setting a morning time)
+            # Actually, for 'dueDate' property of todoTask, it uses 'dateTimeTimeZone' resource type.
+            # Let's try setting T12:00:00 UTC to be safe.
+            payload["dueDateTime"] = {
+                "dateTime": f"{due_date}T12:00:00",
+                "timeZone": "UTC"
+            }
+
+            # Reminder Logic: 2 days before deadline at 9am
+            try:
+                due_dt_obj = datetime.datetime.strptime(due_date, "%Y-%m-%d")
+                reminder_dt_obj = due_dt_obj - datetime.timedelta(days=2)
+                # Set to 14:00 UTC (which is 9:00 AM UTC-5)
+                reminder_dt_obj = reminder_dt_obj.replace(hour=14, minute=0, second=0)
+                
+                payload["reminderDateTime"] = {
+                    "dateTime": reminder_dt_obj.isoformat(),
+                    "timeZone": "UTC"
+                }
+            except ValueError:
+                logger.error(f"Invalid due_date format for reminder calculation: {due_date}")
         
         try:
             response = requests.post(endpoint, headers=self._get_headers(), json=payload)
