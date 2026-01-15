@@ -39,6 +39,11 @@
       "name": "Laboral",
       "description": "Correos electrónicos relacionados con mi relación laboral con la universidad. Estos correos contienen, pero no se limitan a: Zona Laboral, Comprobantes de pago de nomina, etc.",
       "folder_name": "Reader/Laboral"
+    },
+    {
+      "name": "Teams",
+      "description": "Correos electrónicos que corresponden a notificaciones de actividad en Microsoft Teams",
+      "folder_name": "Reader/Teams"
     }
   ],
   "llm_instructions": [
