@@ -1,0 +1,50 @@
+{
+  "categories": [
+    {
+      "name": "Dirección Doctorado en IA",
+      "description": "Correos electrónicos relacionados con la dirección del doctorado en IA. Esto incluye, pero no se limita a, correos de estudiantes solicitando información, correos de interesados en el doctorado solicitando información, correos de profesores del doctorado. También incluye solicitudes de otras unidades académicas de la Universidad solicitando información del doctorado.",
+      "folder_name": "Reader/DIA"
+    },
+    {
+      "name": "Ai-lab",
+      "description": "Correos electrónicos relacionados con la dirección Laboratorio de Innovación en Inteligencia Artificial Ai-lab. Estos correos incluyen, pero no se limitan a, correos de clientes preguntando sobre el avance de proyectos del Ai-lab, correos de profesores preguntando sobre su rol y sus pagos en el Ai-lab, correos de otras unidades académicas de la Universidad solicitando información del Ai-lab. También incluye todos los correos relacionados con la estructuración, desarrollo y despliegue de proyectos del Ai-lab",
+      "folder_name": "Reader/Ai-lab"
+    },
+    {
+      "name": "Campus Virtual",
+      "description": "Estos son los correos enviados por Campus Virtual y que corresponden a la información de la Universidad, como actividades, eventos, información relevante para trabajadores, etc.",
+      "folder_name": "Reader/Campus Virtual"
+    },
+    {
+      "name": "Social",
+      "description": "Correos electrónicos relacionados con redes sociales como LinkedIn, Facebook, Twitter, etc.",
+      "folder_name": "Reader/Social"
+    },
+    {
+      "name": "Research",
+      "description": "Correos electrónicos relacionados con investigación académica. Estos correos son los relacionados con la estructuración, ejecución, avance y cierre de proyectos de investigación. También incluye correos relacionados con la producción y publicación de artículos de investigación o participación en ponencias académicas. Aquí también deben ir los correos en los que se hacen invitaciones a conferencias académicas, evaluación de papers, evaluación de tesis, direcciones de tesis. También deben aparecer en este correo las invitaciones a participar en convocatorias para la obtención de fondos para la investigación.",
+      "folder_name": "Reader/Research"
+    },
+    {
+      "name": "Academic",
+      "description": "Correos electrónicos relacionados con la actividad académica y el desarrollo de las clases en la Universidad. Aquí deben ir todos los correos enviados desde las jefaturas del Departamento, las solicitudes de revisión de exámenes por parte de otros profesores, los correos enviados desde las coordinaciones de asignaturas, los correos enviados por estudiantes de los cursos. También deben ir aquí los correos enviados automáticamente por las plataformas de estudio como Moodle relacionados con el avance de los cursos.",
+      "folder_name": "Reader/Academic"
+    },
+    {
+      "name": "Marketing",
+      "description": "Correos electrónicos que no responden a una conversación anterior y que son enviados por los equipos de marketing. Estos correos pueden ser de promociones, ofertas, etc.",
+      "folder_name": "Reader/Marketing"
+    },
+    {
+      "name": "Laboral",
+      "description": "Correos electrónicos relacionados con mi relación laboral con la universidad. Estos correos contienen, pero no se limitan a: Zona Laboral, Comprobantes de pago de nomina, etc.",
+      "folder_name": "Reader/Laboral"
+    }
+  ],
+  "llm_instructions": [
+    "You are an intelligent email assistant.",
+    "Analyze the submitted email (text + image descriptions) and categorize it into ONE of the provided categories.",
+    "Determine if it requires action. Extract a task title if so."
+  ],
+  "polling_interval_seconds": 60
+}

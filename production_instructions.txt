@@ -1,0 +1,148 @@
+# Production Deployment Guide (Google Cloud Platform)
+
+This guide explains how to deploy the Mail Organizer Agent to **Google Cloud Run**. 
+Cloud Run is a serverless platform that runs stateless containers. It provides a secure public HTTPS URL automatically, which is perfect for our Microsoft Graph Webhook.
+
+## Prerequisites
+
+1.  **Google Cloud Project**: You need an active GCP project.
+2.  **Google Cloud SDK**: Install the `gcloud` CLI tool.
+3.  **Docker**: Install Docker Desktop.
+
+## Step 1: Prepare Code (Done)
+
+-   We created a `.gitignore` to prevent secret files (`.env`) from being uploaded.
+-   We updated `requirements.txt` with all dependencies.
+-   **Action**: Commit and push your code to your GitHub repository.
+    ```bash
+    git add .
+    git commit -m "Ready for production"
+    git push origin main
+    ```
+
+## Step 2: Set up Continuous Deployment (GitHub)
+
+Instead of manually building uploaded code, we will connect Cloud Run to your GitHub repo.
+
+1.  **Go to Cloud Run Console**: https://console.cloud.google.com/run
+2.  **Create Service**: Click **Create Service**.
+3.  **Deploy one revision from an existing container image**: 
+    -   Select "Continuously deploy new revisions from a source repository".
+    -   Click **Setup with Cloud Build**.
+4.  **Connect Repo**:
+    -   Select **GitHub**.
+    -   Authenticate and select your repository (`mail_organizer`).
+    -   Click **Next**.
+5.  **Build Configuration**:
+    -   Current directory (`/`).
+    -   Build Type: **Dockerfile**.
+    -   Click **Save**.
+
+This creates a "Trigger". Every time you push to GitHub, Google will build a new container and deploy it automatically.
+
+6.  **Configuration**:
+    -   **Authentication**: "Allow unauthenticated invocations" (Required for Webhook).
+    -   **Container Port**: 8000.
+    -   **Environment Variables**: (See Step 3).
+
+## Step 3: Configure Environment Variables
+
+You must pass your secrets to the running container.
+
+**Option A: Manual Environment Variables**
+In the "Variables & Secrets" tab during creation (or "Edit & Deploy New Revision" later):
+
+1.  Add variable `WEBHOOK_URL` -> (Leave empty for now, we get it after deploy).
+2.  Add other variables:
+    *   `TARGET_EMAIL`
+    *   `AZURE_CLIENT_ID`
+    *   `AZURE_CLIENT_SECRET`
+    *   `AZURE_TENANT_ID`
+    *   `GROQ_API_KEY`
+    *   `GOOGLE_API_KEY`
+    *   `CLIENT_STATE`
+
+**(Recommended) Option B: Using Google Secret Manager**
+      --set-env-vars="GOOGLE_API_KEY=..." \
+      --set-env-vars="CLIENT_STATE=CreateARandomStringHereForSecurity"
+    ```
+
+    *Security Note*: The `CLIENT_STATE` variable is a shared secret between your app and Microsoft Graph. It ensures that incoming webhook requests actually come from Microsoft and not a malicious actor.
+
+      --set-env-vars="GOOGLE_API_KEY=..." \
+      --set-env-vars="CLIENT_STATE=CreateARandomStringHereForSecurity"
+    ```
+
+    **(Recommended) Option B: Using Google Secret Manager**
+    Instead of passing secrets in plain text (as above), use Secret Manager:
+
+    1.  **Enable API**:
+        ```bash
+        gcloud services enable secretmanager.googleapis.com
+        ```
+    2.  **Create Secrets**:
+        For each variable (e.g. `AZURE_CLIENT_SECRET`), create a secret:
+        ```bash
+        echo -n "super_secret_value" | gcloud secrets create azure-client-secret --data-file=-
+        ```
+    3.  **Grant Access**:
+        Find your Compute Engine default service account (or the specific one used by Cloud Run) and grant it `Secret Accessor` role.
+        ```bash
+        gcloud projects add-iam-policy-binding [PROJECT_ID] \
+          --member=serviceAccount:[PROJECT_NUMBER]-compute@developer.gserviceaccount.com \
+          --role=roles/secretmanager.secretAccessor
+        ```
+    4.  **Deploy with Secrets**:
+        Map the secret versions to environment variables:
+        ```bash
+        gcloud run deploy mail-organizer \
+          --image gcr.io/[PROJECT_ID]/mail-organizer \
+          --set-secrets="AZURE_CLIENT_SECRET=azure-client-secret:latest,GROQ_API_KEY=groq-api-key:latest" \
+          ... (other args)
+        ```
+
+## Step 4: Configure the Webhook URL
+
+1.  **Get the URL**:
+    After the first deployment finishes, copy the Service URL (e.g., `https://mail-organizer-xyz-uc.a.run.app`).
+
+2.  **Update Deployment**:
+    You can edit the revision in the Console or run:
+    ```bash
+    gcloud run services update mail-organizer \
+      --set-env-vars="WEBHOOK_URL=https://mail-organizer-xyz-uc.a.run.app"
+    ```
+    This triggers a new deployment. The app will verify `WEBHOOK_URL`, skip ngrok, and register the subscription.
+
+## Step 5: Verification
+
+1.  **Check Logs**:
+    Go to the Google Cloud Console > Cloud Run > mail-organizer > Logs.
+2.  **Look for success**:
+    You should see: `Running in PRODUCTION mode. Using provided Webhook URL: ...`
+    Followed by: `Authorized and subscribed!`
+
+## Step 6: Configure Scheduler (Subscription Renewal)
+
+Since Cloud Run will shut down your app when idle, we need a way to keep the Microsoft Graph subscription active. We will use **Cloud Scheduler** to wake up the app once a day.
+
+1.  **Create the Job**:
+    Run the following command to create a job that hits your `/renew` endpoint every 24 hours.
+
+    ```bash
+    gcloud scheduler jobs create http mail-organizer-renewer \
+      --schedule="0 0 * * *" \
+      --uri="https://[YOUR_CLOUD_RUN_URL]/renew?clientState=[YOUR_CLIENT_STATE_VALUE]" \
+      --http-method=POST
+    ```
+    
+    *(Replace `[YOUR_CLOUD_RUN_URL]` with your app's URL and `[YOUR_CLIENT_STATE_VALUE]` with the random string you set earlier)*
+
+2.  **Verify**:
+    You can manually force-run the job in the Cloud Console to ensure it returns "Success" (and renews any active subscriptions).
+
+## Important Notes
+
+-   **Scaling**: You do **NOT** need minimum instances (`--min-instances`). Cloud Run will auto-scale to zero to save money, and the Scheduler will wake it up just for the renewal task.
+
+
