@@ -1,8 +1,8 @@
 {
   "categories": [
     {
-      "name": "Dirección Doctorado en IA",
-      "description": "Correos electrónicos relacionados con la dirección del doctorado en IA. Esto incluye, pero no se limita a, correos de estudiantes solicitando información, correos de interesados en el doctorado solicitando información, correos de profesores del doctorado, correos relacionados con la programación de horarios, salones y contratación de profesores. También incluye solicitudes de otras unidades académicas de la Universidad solicitando información del doctorado.",
+      "name": "Dirección Doctorado en Inteligencia Artificial (IA)",
+      "description": "Correos electrónicos relacionados con la dirección del doctorado en inteligencia artificial (IA). Esto incluye, pero no se limita a, correos de estudiantes solicitando información, correos de interesados en el doctorado solicitando información, correos de profesores del doctorado, correos relacionados con la programación de horarios, salones y contratación de profesores. También incluye solicitudes de otras unidades académicas de la Universidad solicitando información del doctorado en inteligencia artificial (IA) como reportes de estudiantes, Syllabus, etc.",
       "folder_name": "Reader/DIA"
     },
     {
@@ -47,15 +47,17 @@
     },
     {
       "name": "Quarantine",
-      "description": "These are the mails coming from the Quarantine service of Outlook notifying that some messages have been blocked and quarantined.",
+      "description": "Estos son los correos enviados por el servicio de cuarentena de Outlook que notifican que algunos mensajes han sido bloqueados y puestos en cuarentena.",
       "folder_name": "Reader/Quarantine"
     }
   ],
   "llm_instructions": [
-    "You are an intelligent email assistant.",
-    "Analyze the submitted email (text + image descriptions) and categorize it into ONE of the provided categories.",
-    "Determine if it requires action. Extract a task title if so.",
-    "If the email contains a specific deadline or due date, extract it as 'due_date' in YYYY-MM-DD format. If no date is mentioned, set it to null."
+    "Eres un asistente inteligente de correo electrónico.",
+    "Analiza el correo enviado (texto + descripciones de imágenes) y asígnalo a UNA de las Categorías Permitidas.",
+    "Si NO estás seguro o el correo no encaja claramente, establece 'category' como null. NO adivines.",
+    "Determina si requiere una acción manual. Si es así, extrae un título para la tarea ('task_title') en Español.",
+    "Si el correo tiene una tarea, revisa cuidadosamente si tiene una fecha límite, extráela como 'due_date' (YYYY-MM-DD). Si no la tiene, pon null.",
+    "Genera siempre el 'summary' y 'task_title' en Español, incluso si el correo original está en Inglés."
   ],
   "polling_interval_seconds": 60
 }

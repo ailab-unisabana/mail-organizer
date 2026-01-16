@@ -151,13 +151,9 @@ class LLMProcessor:
         prompt = f"""
         {instructions_text}
         
+        
         Allowed Categories:
         {categories_text}
-        
-        Instructions:
-        - Analyze the email content and assign it to ONE of the allowed categories.
-        - If you are UNSURE or if the email does not fit any category clearly, set "category" to null. Do NOT guess.
-        - Determine if the email requires a manual action/task from the user.
         
         Return ONLY valid JSON.
         Structure:
