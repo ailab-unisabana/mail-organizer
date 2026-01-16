@@ -143,7 +143,7 @@ def main():
     """
     load_dotenv()
     config = load_config()
-    target_email = os.getenv("TARGET_EMAIL")
+    target_email = os.getenv("TARGET_EMAIL", "").strip()
     
     if not target_email:
         logger.error("TARGET_EMAIL not defined in .env")
@@ -173,7 +173,7 @@ def main():
 
     # 3. Webhook Setup
     # To receive notifications from Microsoft, we need a public HTTPS URL.
-    webhook_url_env = os.getenv("WEBHOOK_URL")
+    webhook_url_env = os.getenv("WEBHOOK_URL", "").strip()
     
     # Check if running in Cloud Run (K_SERVICE is automatically set by Cloud Run)
     is_cloud_run = os.getenv("K_SERVICE") is not None

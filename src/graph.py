@@ -337,7 +337,7 @@ class GraphClient:
         # We set it to ~2 days to be safe. It must be renewed periodically.
         expiration = (datetime.datetime.utcnow() + datetime.timedelta(days=2)).isoformat() + "Z"
 
-        client_state = os.getenv("CLIENT_STATE", "secretClientState")
+        client_state = os.getenv("CLIENT_STATE", "secretClientState").strip()
         
         # DEBUG LOGGING: robustly check inputs
         logger.info("--- SUBSCRIPTION DEBUG INFO ---")
