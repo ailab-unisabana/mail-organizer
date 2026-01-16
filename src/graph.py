@@ -342,7 +342,8 @@ class GraphClient:
             "notificationUrl": notification_url,
             "resource": f"users/{user_email}/mailFolders/Inbox/messages", # Listen to Inbox
             "expirationDateTime": expiration,
-            "clientState": os.getenv("CLIENT_STATE", "secretClientState") # Security token to validate webhook
+            "clientState": os.getenv("CLIENT_STATE", "secretClientState"), # Security token to validate webhook
+            "includeResourceData": False # Explicitly disable rich notifications to avoid ExtensionError
         }
         
         try:
