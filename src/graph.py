@@ -314,7 +314,7 @@ class GraphClient:
             image_attachments = []
             for att in attachments:
                 if att.get('@odata.type') == '#microsoft.graph.fileAttachment':
-                    if att.get('contentType', '').startswith('image/'):
+                    if att.get('contentType', '').startswith('image/') and att.get('isInline', False):
                         image_attachments.append({
                             'name': att.get('name'),
                             'contentDetails': att.get('contentBytes'), # Base64 encoded content
