@@ -1,0 +1,61 @@
+# Setting up Automatic Subscription Renewal (Cloud Scheduler)
+
+Microsoft Graph webhook subscriptions **expire every shortly (usually 3 days)**. To prevent your mail organizer from stopping, you must renew the subscription periodically.
+
+We will use **Google Cloud Scheduler** to trigger the renewal endpoint (`/renew`) of your application every 24 hours.
+
+## Prerequisites
+
+1.  **Deployed Application**: Your app must be deployed to Cloud Run and have a public URL (e.g., `https://mail-organizer-xyz.run.app`).
+2.  **Client State Secret**: You need the value of the `CLIENT_STATE` environment variable you set during deployment. This acts as a password for the renewal endpoint.
+
+## Step 1: Create the Scheduler Job
+
+Run the following command in your terminal (or Cloud Shell).
+
+Replace the placeholders:
+*   `[YOUR_CLOUD_RUN_URL]`: Your actual https URL.
+*   `[YOUR_CLIENT_STATE]`: The secret string from your `.env` or Secret Manager.
+
+```bash
+gcloud scheduler jobs create http mail-organizer-renewer \
+  --location=us-central1 \
+  --schedule="0 9 * * *" \
+  --uri="https://[YOUR_CLOUD_RUN_URL]/renew?clientState=[YOUR_CLIENT_STATE]" \
+  --http-method=POST \
+  --time-zone="America/New_York" \
+  --description="Renews Microsoft Graph subscription daily at 9 AM"
+```
+
+### Explanation of flags:
+*   `--schedule="0 9 * * *"`: Runs every day at 09:00.
+*   `--uri`: The target endpoint. We pass `clientState` as a query parameter for security verification.
+*   `--http-method=POST`: The endpoint expects a POST request.
+
+## Step 2: Verify the Job
+
+1.  **Force Run**:
+    Go to the [Cloud Scheduler Console](https://console.cloud.google.com/cloudscheduler) or run:
+    ```bash
+    gcloud scheduler jobs run mail-organizer-renewer --location=us-central1
+    ```
+
+2.  **Check Results**:
+    *   In Cloud Scheduler, you should see "Last Run Status: Success".
+    *   In **Cloud Run Logs**, you should see:
+        *   `POST /renew?clientState=...`
+        *   `Found existing subscription: ... authenticating renewal...`
+        *   `Subscription ... renewed.`
+
+## Troubleshooting
+
+*   **401 Unauthorized**:
+    *   This means the `clientState` you passed in the URL does not match the `CLIENT_STATE` environment variable in the running container.
+    *   **Fix**: Check your `gcloud run services describe mail-organizer` to see the env var value and update the scheduler job.
+
+*   **500 Error (Graph client not initialized)**:
+    *   This happens if the app restarts and hasn't initialized the Graph Client yet.
+    *   **Fix**: The app is designed to initialize on startup. If this persists, ensure your `TARGET_EMAIL` and Azure credentials are correct.
+
+*   **Job Failed (Connection Refused)**:
+    *   Your Cloud Run instance might be down or the URL is incorrect. Verify the URL in the browser.

@@ -117,7 +117,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
 
                 # SECURITY: Validate clientState
                 # Ensure this request actually comes from our subscription by checking the shared secret.
-                expected_state = os.getenv("CLIENT_STATE", "secretClientState")
+                expected_state = os.getenv("CLIENT_STATE", "secretClientState").strip()
                 if notification.get("clientState") != expected_state:
                     logger.warning("Received webhook with invalid clientState. Ignoring.")
                     continue
@@ -139,7 +139,7 @@ async def renew_subscriptions(request: Request):
     Secured by checking the same CLIENT_STATE as a query parameter.
     """
     # 1. Security Check
-    expected_state = os.getenv("CLIENT_STATE", "secretClientState")
+    expected_state = os.getenv("CLIENT_STATE", "secretClientState").strip()
     
     # We verify the request has the correct secret token
     token = request.query_params.get("clientState")
@@ -161,7 +161,7 @@ async def manual_subscribe(request: Request):
     Useful if startup subscription failed.
     """
     # 1. Security Check
-    expected_state = os.getenv("CLIENT_STATE", "secretClientState")
+    expected_state = os.getenv("CLIENT_STATE", "secretClientState").strip()
     token = request.query_params.get("clientState")
     if token != expected_state:
         return Response(content="Unauthorized", status_code=401)
