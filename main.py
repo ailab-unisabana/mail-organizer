@@ -175,11 +175,21 @@ def main():
     # To receive notifications from Microsoft, we need a public HTTPS URL.
     webhook_url_env = os.getenv("WEBHOOK_URL")
     
+    # Check if running in Cloud Run (K_SERVICE is automatically set by Cloud Run)
+    is_cloud_run = os.getenv("K_SERVICE") is not None
+
     if webhook_url_env:
         # PRODUCTION MODE (Cloud Run, Azure App Service, etc.)
         # The URL is fixed and provided by the environment.
         logger.info(f"Running in PRODUCTION mode. Using provided Webhook URL: {webhook_url_env}")
         notification_url = f"{webhook_url_env}/webhook"
+        
+    elif is_cloud_run:
+        # PRODUCTION MODE but WEBHOOK_URL is missing.
+        # This allows the container to start so we can get the URL, then update env vars.
+        logger.warning("Running in Cloud Run but WEBHOOK_URL is NOT set. Skipping subscription creation.")
+        notification_url = None
+        
     else:
         # DEVELOPMENT MODE
         # Use ngrok to tunnel localhost to the internet.
@@ -189,31 +199,35 @@ def main():
             notification_url = f"{public_url}/webhook"
         except Exception as e:
             logger.error(f"Error starting ngrok: {e}")
-            return
+            # If ngrok fails in local dev, we probably want to stop. 
+            # But let's keep it running just in case user wants to debug server only.
+            notification_url = None
 
     # 4. Create Subscription
     # Tell Microsoft Graph to start sending 'created' events for the Inbox to our URL.
-    try:
-        # In this prototype, we create a new subscription every run.
-        # In production, you might check if one exists or just let duplicates expire (not ideal but safe).
-        subscription = client.create_subscription(target_email, notification_url)
-        if subscription:
-            logger.info(f"Authorized and subscribed! ID: {subscription['id']}")
-            
-    except Exception as e:
-         logger.error(f"Error creating subscription: {e}")
-         if not webhook_url_env:
-             ngrok.kill()
-         return
+    if notification_url:
+        try:
+            # In this prototype, we create a new subscription every run.
+            subscription = client.create_subscription(target_email, notification_url)
+            if subscription:
+                logger.info(f"Authorized and subscribed! ID: {subscription['id']}")
+                
+        except Exception as e:
+             logger.error(f"Error creating subscription: {e}")
+             # Do NOT exit. Keep server running so we can see logs or retry later.
+             pass
+    else:
+        logger.info("Skipping subscription creation (no notification URL).")
 
     # 5. Keep Process Alive
     # usage: The background thread handles the server, the main thread just waits.
+    # This loop is critical to keep the container running.
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
-        if not webhook_url_env:
+        if not webhook_url_env and not is_cloud_run:
             ngrok.kill()
 
 if __name__ == "__main__":
