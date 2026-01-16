@@ -8,6 +8,7 @@ from src.graph import GraphClient
 from src.llm import LLMProcessor
 
 # Configure logging
+# Logs will be output to both the console (StreamHandler) and a file (FileHandler).
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -19,10 +20,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def load_config(path="config.json"):
+    """
+    Loads the Application Configuration.
+    Expects a JSON file defining categories, folder names, and LLM instructions.
+    """
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def get_folder_name_for_category(category_name, config):
+    """
+    Maps an LLM-determined category name to the corresponding Outlook folder path.
+    Example: 'Financial' -> 'Inbox/Invoices'
+    """
     if not category_name:
         return None
     for cat in config.get('categories', []):
@@ -31,8 +40,21 @@ def get_folder_name_for_category(category_name, config):
     return None
 
 def process_emails(client, llm, config, target_email, specific_message_id=None):
+    """
+    Core Business Logic: Fetches, Analyzes, and Acts on emails.
+    
+    This function is called by the Webhook Server (src/server.py) whenever a new email notification arrives.
+    
+    Args:
+        client (GraphClient): Initialized Graph API client.
+        llm (LLMProcessor): Initialized LLM wrapper.
+        config (dict): App configuration.
+        target_email (str): The user email to process.
+        specific_message_id (str): ID of the specific email to process (from webhook).
+    """
     emails = []
     
+    # 1. Fetch Email Data
     if specific_message_id:
         logger.info(f"Fetching specific message ID: {specific_message_id}")
         msg = client.get_message(target_email, specific_message_id)
@@ -42,7 +64,8 @@ def process_emails(client, llm, config, target_email, specific_message_id=None):
             logger.warning(f"Message {specific_message_id} not found or error fetching.")
             return
     else:
-        # Fallback to polling (optional, maybe we only want specific now)
+        # Fallback: If no ID provided, check recent unread emails.
+        # This is useful for initial testing or catching up if notifications were missed.
         logger.info(f"Checking for new emails for {target_email}...")
         emails = client.get_unread_emails(target_email)
     
@@ -50,22 +73,23 @@ def process_emails(client, llm, config, target_email, specific_message_id=None):
         logger.info("No emails found to process.")
         return
 
+    # 2. Process Each Email
     for email in emails:
         message_id = email['id']
         subject = email.get('subject', 'No Subject')
-        body = email.get('body', {}).get('content', '')  # Note: graph returns HTML or Text. LLM might need text.
-        # Ideally we strip HTML or use 'bodyPreview' if sufficient, but let's pass body content.
-        # If body.content is HTML, LLM handles it well usually, or we can use beautifulsoup. 
-        # For this implementation, we pass raw content.
+        # We prefer the raw content. In a more advanced version, we might parse HTML to plain text.
+        body = email.get('body', {}).get('content', '') 
         
         logger.info(f"Processing email: {subject}")
         
-        # 1. Get Attachments (Images)
+        # 3. Get Attachments (Images only)
+        # We need to fetch these separately to pass to Gemini.
         image_data = []
         if email.get('hasAttachments'):
              image_data = client.get_attachments(target_email, message_id)
 
-        # 2. Analyze
+        # 4. LLM Analysis
+        # Determine category, actionable status, tasks, and due dates.
         analysis = llm.analyze_email(subject, body, image_data)
         logger.info(f"Analysis result: {analysis}")
         
@@ -73,7 +97,8 @@ def process_emails(client, llm, config, target_email, specific_message_id=None):
         is_actionable = analysis.get('is_actionable')
         task_title = analysis.get('task_title')
         
-        # 3. Handle Category & Move
+        # 5. Move Email
+        # Based on category, find the target folder and move the email.
         folder_name = get_folder_name_for_category(category, config)
         
         if folder_name:
@@ -83,17 +108,17 @@ def process_emails(client, llm, config, target_email, specific_message_id=None):
                  logger.error(f"Failed to move to {folder_name}")
         else:
              logger.info("No category assigned or category not found in config. Leaving in Inbox.")
-             # Update variable for Task List usage (if not categorized, use default list)
+             # If no category, we will default any task to the default Task List.
              folder_name = None 
 
-        # 4. Handle Task
+        # 6. Create Task (Sync to Microsoft To Do)
         if is_actionable:
             title = task_title if task_title else f"Follow up: {subject}"
             content = f"Source Email: {subject}\nSummary: {analysis.get('summary')}"
             due_date = analysis.get('due_date')
             
-            # List name corresponds to folder name (if categorized), else None (default list)
-            # Use only the leaf folder name (e.g. "DIA" from "Reader/DIA")
+            # Smart List Selection:
+            # If the email was categorized to "Reader/DIA", we try to put the task in a "DIA" list.
             list_name = folder_name.split('/')[-1] if folder_name else None
             
             client.create_todo_task(target_email, title, content, list_name=list_name, due_date=due_date)
@@ -104,6 +129,18 @@ from pyngrok import ngrok
 from src.server import app, processors
 
 def main():
+    """
+    Application Entry Point.
+    
+    Orchestration Steps:
+    1. Load environment variables & config.
+    2. Initialize Service Clients (Auth, Graph, LLM).
+    3. Inject dependencies into the Server module.
+    4. Start the FastAPI Webhook Server in a background thread.
+    5. Determine the Webhook URL (Production vs. Dev/Ngrok).
+    6. Subscribe to Microsoft Graph notifications.
+    7. Keep the main process running to listen for events.
+    """
     load_dotenv()
     config = load_config()
     target_email = os.getenv("TARGET_EMAIL")
@@ -112,11 +149,12 @@ def main():
         logger.error("TARGET_EMAIL not defined in .env")
         return
 
+    # Initialize Services
     auth_manager = AuthManager()
     client = GraphClient(auth_manager)
     llm = LLMProcessor(config)
     
-    # 1. Setup Server Processors
+    # 1. Setup Server Processors (Manual Dependency Injection)
     processors["graph_client"] = client
     processors["llm_processor"] = llm
     processors["config"] = config
@@ -125,7 +163,7 @@ def main():
     logger.info("Starting Mail Organizer (Webhook Mode)...")
     
     # 2. Start Server in Background Thread
-    # We must start the server FIRST so it can handle the validation handshake.
+    # We use a background thread for uvicorn so the main thread can continue to setup ngrok and subscriptions.
     port = int(os.getenv("PORT", 8000))
     server_thread = threading.Thread(target=uvicorn.run, args=(app,), kwargs={"host": "0.0.0.0", "port": port, "log_level": "info"}, daemon=True)
     server_thread.start()
@@ -133,43 +171,43 @@ def main():
     # Give server a moment to start
     time.sleep(2)
 
-    # 3. Webhook Setup (Ngrok vs Production)
+    # 3. Webhook Setup
+    # To receive notifications from Microsoft, we need a public HTTPS URL.
     webhook_url_env = os.getenv("WEBHOOK_URL")
     
     if webhook_url_env:
-        # PRODUCTION MODE
-        # If a URL is provided (e.g. Cloud Run URL), use it directly.
+        # PRODUCTION MODE (Cloud Run, Azure App Service, etc.)
+        # The URL is fixed and provided by the environment.
         logger.info(f"Running in PRODUCTION mode. Using provided Webhook URL: {webhook_url_env}")
         notification_url = f"{webhook_url_env}/webhook"
     else:
         # DEVELOPMENT MODE
-        # Start ngrok
+        # Use ngrok to tunnel localhost to the internet.
         try:
             public_url = ngrok.connect(port).public_url
             logger.info(f"ngrok tunnel \"{public_url}\" -> \"http://localhost:{port}\"")
             notification_url = f"{public_url}/webhook"
         except Exception as e:
             logger.error(f"Error starting ngrok: {e}")
-            # In dev, we might want to stop here.
             return
 
     # 4. Create Subscription
+    # Tell Microsoft Graph to start sending 'created' events for the Inbox to our URL.
     try:
-        # In a real app, we should check existing subscriptions first to avoid duplicates
-        # But Graph subscriptions have short lives, usually we assume clean slate or clear old ones.
-        # For this prototype: Create new one.
+        # In this prototype, we create a new subscription every run.
+        # In production, you might check if one exists or just let duplicates expire (not ideal but safe).
         subscription = client.create_subscription(target_email, notification_url)
         if subscription:
             logger.info(f"Authorized and subscribed! ID: {subscription['id']}")
             
     except Exception as e:
          logger.error(f"Error creating subscription: {e}")
-         # Attempt cleanup if ngrok was started?
          if not webhook_url_env:
              ngrok.kill()
          return
 
-    # Keep main thread alive
+    # 5. Keep Process Alive
+    # usage: The background thread handles the server, the main thread just waits.
     try:
         while True:
             time.sleep(1)

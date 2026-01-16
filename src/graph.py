@@ -6,11 +6,28 @@ import os
 logger = logging.getLogger(__name__)
 
 class GraphClient:
+    """
+    A client wrapper for the Microsoft Graph API.
+    
+    This class handles specific operations required for the email organizer:
+    - Reading emails from the Inbox.
+    - Moving emails between folders.
+    - Creating tasks in Microsoft To Do.
+    - Managing webhook subscriptions for new email notifications.
+    """
     def __init__(self, auth_manager):
+        """
+        Initializes the GraphClient with an AuthManager instance.
+        auth_manager: Instance of AuthManager (from src.auth) to handle token acquisition.
+        """
         self.auth_manager = auth_manager
         self.base_url = "https://graph.microsoft.com/v1.0"
 
     def _get_headers(self):
+        """
+        Constructs the HTTP headers required for Graph API requests.
+        Always fetches a fresh access token from the AuthManager.
+        """
         token = self.auth_manager.get_access_token()
         return {
             "Authorization": f"Bearer {token}",
@@ -18,18 +35,29 @@ class GraphClient:
         }
 
     def get_unread_emails(self, user_email):
-        """Fetches unread emails from the Inbox."""
+        """
+        Fetches the 10 most recent unread emails from the user's Inbox.
+        
+        Args:
+            user_email (str): The email address (UPN) of the target user.
+            
+        Returns:
+            list: A list of email dictionaries containing 'id', 'subject', 'body', etc.
+        """
+        # API Endpoint: List messages in specific user's Inbox
         endpoint = f"{self.base_url}/users/{user_email}/mailFolders/Inbox/messages"
+        
+        # OData Query Parameters to filter and select data
         params = {
-            "$filter": "isRead eq false",
-            "$top": 10,
-            "$select": "id,subject,body,from,receivedDateTime,hasAttachments",
-            "$orderby": "receivedDateTime desc"
+            "$filter": "isRead eq false", # Only get unread messages
+            "$top": 10,                   # Limit to top 10 to check
+            "$select": "id,subject,body,from,receivedDateTime,hasAttachments", # Select specific fields to reduce payload size
+            "$orderby": "receivedDateTime desc" # Newest first
         }
         
         try:
             response = requests.get(endpoint, headers=self._get_headers(), params=params)
-            response.raise_for_status()
+            response.raise_for_status() # Raise error for bad HTTP status
             return response.json().get('value', [])
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching emails: {e}")
@@ -40,9 +68,13 @@ class GraphClient:
             return []
 
     def get_message(self, user_email, message_id):
-        """Fetches a specific message by ID."""
+        """
+        Fetches a single specific message by its unique ID.
+        Useful when processing a webhook notification that gives us a resource ID.
+        """
         endpoint = f"{self.base_url}/users/{user_email}/messages/{message_id}"
-        # params same as get_unread for consistency
+        
+        # Same fields as get_unread to maintain consistency in processing logic
         params = {
             "$select": "id,subject,body,from,receivedDateTime,hasAttachments"
         }
@@ -58,15 +90,26 @@ class GraphClient:
             return None
 
     def move_email(self, user_email, message_id, folder_name):
-        """Moves an email to a specific folder. Creates folder if it doesn't exist."""
-        # 1. Get (or create) folder ID by path
+        """
+        Moves an email to a specific destination folder.
+        If the folder does not exist, it will be created dynamically.
+        
+        Args:
+            user_email: The user's email address.
+            message_id: The unique ID of the message to move.
+            folder_name: The display name of the target folder (e.g., 'Invoices').
+            
+        Returns:
+            bool: True if successful, False otherwise.
+        """
+        # 1. Resolve folder name to a Folder ID. Create it if missing.
         folder_id = self._get_folder_id(user_email, folder_name)
             
         if not folder_id:
             logger.error(f"Could not find or create folder: {folder_name}")
             return False
             
-        # 2. Move email
+        # 2. Perform the Move action via Graph API
         endpoint = f"{self.base_url}/users/{user_email}/messages/{message_id}/move"
         payload = {"destinationId": folder_id}
         
@@ -81,28 +124,27 @@ class GraphClient:
 
     def _get_folder_id(self, user_email, folder_path):
         """
-        Resolves a folder path (e.g. 'Inbox/Important') to an ID. 
-        Creates the folder if it doesn't exist.
+        Helper to find the ID of a mail folder given its path (e.g., 'Inbox/Important').
+        Iteratively finds or creates subfolders.
         """
         parts = folder_path.split('/')
-        current_id = "msgfolderroot" # Top of hierarchy
+        current_id = "msgfolderroot" # The root of the mailbox folder hierarchy
         
-        # If path starts with Inbox, mapping it to well-known name might be safer, 
-        # but 'Inbox' usually sits at msgfolderroot too.
-        # Let's iterate.
-        
+        # Traverse the path, one level at a time
         for part in parts:
             found_id = self._find_child_folder(user_email, current_id, part)
             if not found_id:
                 logger.info(f"Folder '{part}' not found in '{current_id}', creating...")
                 found_id = self._create_child_folder(user_email, current_id, part)
                 if not found_id:
+                    # Failed to create a necessary subfolder, abort
                     return None
             current_id = found_id
             
         return current_id
 
     def _find_child_folder(self, user_email, parent_id, folder_name):
+        """Searches for a child folder with a specific name under a parent folder."""
         endpoint = f"{self.base_url}/users/{user_email}/mailFolders/{parent_id}/childFolders"
         params = {"$filter": f"displayName eq '{folder_name}'", "$select": "id"}
         try:
@@ -117,6 +159,7 @@ class GraphClient:
             return None
 
     def _create_child_folder(self, user_email, parent_id, folder_name):
+        """Creates a new child folder under the specified parent."""
         endpoint = f"{self.base_url}/users/{user_email}/mailFolders/{parent_id}/childFolders"
         payload = {"displayName": folder_name}
         try:
@@ -129,11 +172,12 @@ class GraphClient:
 
     def _get_or_create_task_list_id(self, user_email, list_name):
         """
-        Fetches the ID of a specific task list by name. Creates it if it doesn't exist.
+        Fetches the ID of a Microsoft To Do task list. 
+        If a list with 'list_name' doesn't exist, it creates one.
         """
         endpoint = f"{self.base_url}/users/{user_email}/todo/lists"
         try:
-            # 1. Search for existing list
+            # 1. Search existing lists
             response = requests.get(endpoint, headers=self._get_headers())
             response.raise_for_status()
             lists = response.json().get('value', [])
@@ -142,7 +186,7 @@ class GraphClient:
                 if lst.get('displayName') == list_name:
                     return lst['id']
             
-            # 2. Create if not found
+            # 2. If not found, create a new list
             logger.info(f"Task list '{list_name}' not found, creating...")
             payload = {"displayName": list_name}
             response = requests.post(endpoint, headers=self._get_headers(), json=payload)
@@ -156,19 +200,22 @@ class GraphClient:
             return None
 
     def _get_default_task_list_id(self, user_email):
-        """Fetches the ID of the default To Do task list."""
+        """
+        Finds the default 'Tasks' list in Microsoft To Do.
+        Used as a fallback if a specific named list cannot be found or created.
+        """
         endpoint = f"{self.base_url}/users/{user_email}/todo/lists"
         try:
             response = requests.get(endpoint, headers=self._get_headers())
             response.raise_for_status()
             lists = response.json().get('value', [])
             
-            # 1. Try to find the 'default' known list
+            # 1. Look for the system 'default' list
             for lst in lists:
                 if lst.get('wellknownListName') == 'default':
                     return lst['id']
             
-            # 2. Fallback: Return the first list if available
+            # 2. Fallback: Just return the first available list
             if lists:
                 return lists[0]['id']
                 
@@ -181,18 +228,26 @@ class GraphClient:
 
     def create_todo_task(self, user_email, title, content, list_name=None, due_date=None):
         """
-        Creates a task in a specific list. 
-        If list_name is provided, it tries to find/create that list.
-        Otherwise falls back to default.
-        due_date: Optional string in YYYY-MM-DD format.
+        Creates a new task in Microsoft To Do.
+        
+        Args:
+            user_email: The user's email.
+            title: The task subject.
+            content: The detailed description/body of the task.
+            list_name: (Optional) The name of the To Do list to add this to.
+            due_date: (Optional) Due date in 'YYYY-MM-DD' format.
+            
+        Returns:
+            dict: The created task object from the API response.
         """
         list_id = None
         
+        # Determine the target list
         if list_name:
             list_id = self._get_or_create_task_list_id(user_email, list_name)
             
         if not list_id:
-             # Fallback to default if specific list fail or not provided
+             # Fallback to default list if specific list retrieval failed
             if list_name:
                 logger.warning(f"Could not use list '{list_name}', falling back to default.")
             list_id = self._get_default_task_list_id(user_email)
@@ -201,7 +256,7 @@ class GraphClient:
             logger.error("Could not find a valid To Do task list.")
             return None
 
-        # Create the task
+        # Prepare Task Creation Payload
         endpoint = f"{self.base_url}/users/{user_email}/todo/lists/{list_id}/tasks"
         payload = {
             "title": title,
@@ -211,23 +266,20 @@ class GraphClient:
             }
         }
         
+        # Handle Due Date and Reminder
         if due_date:
-            # Graph API expects 'dueDateTime': {'dateTime': '...', 'timeZone': '...'}
-            # We append a default time (e.g., end of day or noon) or just date if supported.
-            # To Do tasks usually just have a date. 
-            # Format: YYYY-MM-DDT09:00:00 (Setting a morning time)
-            # Actually, for 'dueDate' property of todoTask, it uses 'dateTimeTimeZone' resource type.
-            # Let's try setting T12:00:00 UTC to be safe.
+            # Set the Due Date to Noon UTC (safe common ground)
             payload["dueDateTime"] = {
                 "dateTime": f"{due_date}T12:00:00",
                 "timeZone": "UTC"
             }
 
-            # Reminder Logic: 2 days before deadline at 9am
+            # Reminder Logic: Set a reminder 2 days before the deadline.
             try:
                 due_dt_obj = datetime.datetime.strptime(due_date, "%Y-%m-%d")
                 reminder_dt_obj = due_dt_obj - datetime.timedelta(days=2)
-                # Set to 14:00 UTC (which is 9:00 AM UTC-5)
+                
+                # Set reminder time to 14:00 UTC (approx. 9:00 AM EST)
                 reminder_dt_obj = reminder_dt_obj.replace(hour=14, minute=0, second=0)
                 
                 payload["reminderDateTime"] = {
@@ -247,7 +299,10 @@ class GraphClient:
             return None
 
     def get_attachments(self, user_email, message_id):
-        """Fetches attachments for a specific message."""
+        """
+        Fetches file attachments (specifically images) for a message.
+        This allows the LLM to 'see' images attached to emails.
+        """
         endpoint = f"{self.base_url}/users/{user_email}/messages/{message_id}/attachments"
         
         try:
@@ -255,14 +310,14 @@ class GraphClient:
             response.raise_for_status()
             attachments = response.json().get('value', [])
             
-            # Filter for file attachments (images)
+            # Filter solely for image file attachments
             image_attachments = []
             for att in attachments:
                 if att.get('@odata.type') == '#microsoft.graph.fileAttachment':
                     if att.get('contentType', '').startswith('image/'):
                         image_attachments.append({
                             'name': att.get('name'),
-                            'contentDetails': att.get('contentBytes'),
+                            'contentDetails': att.get('contentBytes'), # Base64 encoded content
                             'contentType': att.get('contentType')
                         })
             return image_attachments
@@ -273,21 +328,21 @@ class GraphClient:
 
     def create_subscription(self, user_email, notification_url):
         """
-        Creates a subscription for new emails in the Inbox.
-        notification_url: Public HTTPS URL where Graph will send notifications.
+        Creates a webhook subscription to listen for 'created' events in the Inbox.
+        Graph API will send a POST to 'notification_url' whenever a new email arrives.
         """
         endpoint = f"{self.base_url}/subscriptions"
         
-        # Expiration must be less than 3 days (4230 minutes). 
-        # Making it ~2 days from now.
+        # Subscriptions have a max lifetime (usually ~3 days). 
+        # We set it to ~2 days to be safe. It must be renewed periodically.
         expiration = (datetime.datetime.utcnow() + datetime.timedelta(days=2)).isoformat() + "Z"
 
         payload = {
             "changeType": "created",
             "notificationUrl": notification_url,
-            "resource": f"users/{user_email}/mailFolders/Inbox/messages",
+            "resource": f"users/{user_email}/mailFolders/Inbox/messages", # Listen to Inbox
             "expirationDateTime": expiration,
-            "clientState": os.getenv("CLIENT_STATE", "secretClientState") # Use env var for security
+            "clientState": os.getenv("CLIENT_STATE", "secretClientState") # Security token to validate webhook
         }
         
         try:
@@ -303,7 +358,7 @@ class GraphClient:
 
     def renew_subscription(self, subscription_id):
         """
-        Renews an existing subscription.
+        Extends the expiration time of an existing subscription by another 2 days.
         """
         endpoint = f"{self.base_url}/subscriptions/{subscription_id}"
         expiration = (datetime.datetime.utcnow() + datetime.timedelta(days=2)).isoformat() + "Z"
@@ -323,8 +378,8 @@ class GraphClient:
 
     def renew_all_subscriptions(self):
         """
-        Fetches all current subscriptions and renews them.
-        Useful for stateless renewal (e.g. Cloud Scheduler).
+        Convenience method to list all active subscriptions and renew them.
+        This is intended to be called by a scheduled job (e.g., Cloud Scheduler).
         """
         endpoint = f"{self.base_url}/subscriptions"
         try:
