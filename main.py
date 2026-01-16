@@ -126,8 +126,8 @@ def main():
     
     # 2. Start Server in Background Thread
     # We must start the server FIRST so it can handle the validation handshake.
-    port = 8000
-    server_thread = threading.Thread(target=uvicorn.run, args=(app,), kwargs={"host": "127.0.0.1", "port": port, "log_level": "info"}, daemon=True)
+    port = int(os.getenv("PORT", 8000))
+    server_thread = threading.Thread(target=uvicorn.run, args=(app,), kwargs={"host": "0.0.0.0", "port": port, "log_level": "info"}, daemon=True)
     server_thread.start()
     
     # Give server a moment to start
