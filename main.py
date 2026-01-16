@@ -206,16 +206,32 @@ def main():
     # 4. Create Subscription
     # Tell Microsoft Graph to start sending 'created' events for the Inbox to our URL.
     if notification_url:
-        try:
-            # In this prototype, we create a new subscription every run.
-            subscription = client.create_subscription(target_email, notification_url)
-            if subscription:
-                logger.info(f"Authorized and subscribed! ID: {subscription['id']}")
+        # Normalize URL: Remove trailing slash if present
+        notification_url = notification_url.rstrip('/')
+        logger.info(f"Targeting Notification URL: {notification_url}")
+
+        # Retry Logic: Subscription creation might fail if the app isn't reachable yet
+        max_retries = 5
+        base_delay = 5  # seconds
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"Subscription attempt {attempt}/{max_retries}...")
+                subscription = client.create_subscription(target_email, notification_url)
                 
-        except Exception as e:
-             logger.error(f"Error creating subscription: {e}")
-             # Do NOT exit. Keep server running so we can see logs or retry later.
-             pass
+                if subscription:
+                    logger.info(f"Authorized and subscribed! ID: {subscription['id']}")
+                    break # Success!
+                
+            except Exception as e:
+                logger.error(f"Error creating subscription (Attempt {attempt}): {e}")
+            
+            if attempt < max_retries:
+                delay = base_delay * attempt
+                logger.info(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+        else:
+             logger.error("Failed to create subscription after all retries. Check logs/firewall.")
     else:
         logger.info("Skipping subscription creation (no notification URL).")
 

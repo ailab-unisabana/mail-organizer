@@ -154,6 +154,40 @@ async def renew_subscriptions(request: Request):
     count = client.renew_all_subscriptions()
     return {"status": "success", "renewed": count}
 
+@app.post("/subscribe")
+async def manual_subscribe(request: Request):
+    """
+    Emergency endpoint to manually trigger a subscription creation.
+    Useful if startup subscription failed.
+    """
+    # 1. Security Check
+    expected_state = os.getenv("CLIENT_STATE", "secretClientState")
+    token = request.query_params.get("clientState")
+    if token != expected_state:
+        return Response(content="Unauthorized", status_code=401)
+
+    # 2. Get Dependencies
+    client = processors["graph_client"]
+    target_email = processors["target_email"]
+    webhook_url = os.getenv("WEBHOOK_URL")
+
+    if not all([client, target_email, webhook_url]):
+        return Response(content="Configuration missing (client, email, or webhook_url)", status_code=500)
+
+    # 3. Create Subscription
+    # Ensure correct formatting
+    notification_url = f"{webhook_url.rstrip('/')}/webhook"
+    
+    try:
+        sub = client.create_subscription(target_email, notification_url)
+        if sub:
+            return {"status": "success", "subscription_id": sub['id']}
+        else:
+            return Response(content="Failed to create subscription (check logs)", status_code=500)
+    except Exception as e:
+        logger.error(f"Manual subscription error: {e}")
+        return Response(content=str(e), status_code=500)
+
 @app.get("/")
 def read_root():
     """Health check endpoint."""
