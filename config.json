@@ -2,7 +2,7 @@
   "categories": [
     {
       "name": "Dirección Doctorado en IA",
-      "description": "Correos electrónicos relacionados con la dirección del doctorado en IA. Esto incluye, pero no se limita a, correos de estudiantes solicitando información, correos de interesados en el doctorado solicitando información, correos de profesores del doctorado. También incluye solicitudes de otras unidades académicas de la Universidad solicitando información del doctorado.",
+      "description": "Correos electrónicos relacionados con la dirección del doctorado en IA. Esto incluye, pero no se limita a, correos de estudiantes solicitando información, correos de interesados en el doctorado solicitando información, correos de profesores del doctorado, correos relacionados con la programación de horarios, salones y contratación de profesores. También incluye solicitudes de otras unidades académicas de la Universidad solicitando información del doctorado.",
       "folder_name": "Reader/DIA"
     },
     {
