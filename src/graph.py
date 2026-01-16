@@ -337,14 +337,26 @@ class GraphClient:
         # We set it to ~2 days to be safe. It must be renewed periodically.
         expiration = (datetime.datetime.utcnow() + datetime.timedelta(days=2)).isoformat() + "Z"
 
+        client_state = os.getenv("CLIENT_STATE", "secretClientState")
+        
+        # DEBUG LOGGING: robustly check inputs
+        logger.info("--- SUBSCRIPTION DEBUG INFO ---")
+        logger.info(f"Target Email: '{user_email}'")
+        logger.info(f"Notification URL: '{notification_url}'")
+        logger.info(f"Client State present: {bool(client_state)}")
+        logger.info(f"Client State length: {len(client_state) if client_state else 0}")
+        logger.info("-------------------------------")
+
         payload = {
             "changeType": "created",
             "notificationUrl": notification_url,
             "resource": f"users/{user_email}/mailFolders/Inbox/messages", # Listen to Inbox
             "expirationDateTime": expiration,
-            "clientState": os.getenv("CLIENT_STATE", "secretClientState"), # Security token to validate webhook
+            "clientState": client_state, # Security token to validate webhook
             "includeResourceData": False # Explicitly disable rich notifications to avoid ExtensionError
         }
+        
+        logger.info(f"DEBUG: Full Payload: {payload}")
         
         try:
             response = requests.post(endpoint, headers=self._get_headers(), json=payload)
