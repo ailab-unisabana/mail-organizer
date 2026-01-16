@@ -29,8 +29,8 @@ class LLMProcessor:
         self.config = config
         
         # Load API Keys
-        groq_api_key = os.getenv("GROQ_API_KEY")
-        google_api_key = os.getenv("GOOGLE_API_KEY")
+        groq_api_key = os.getenv("GROQ_API_KEY", "").strip()
+        google_api_key = os.getenv("GOOGLE_API_KEY", "").strip()
 
         if not groq_api_key:
             raise ValueError("GROQ_API_KEY environment variable is not set.")
