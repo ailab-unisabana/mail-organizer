@@ -226,7 +226,7 @@ class GraphClient:
                 logger.error("HINT: Ensure the App has 'Tasks.ReadWrite.All' Application Permission in Azure Portal.")
             return None
 
-    def create_todo_task(self, user_email, title, content, list_name=None, due_date=None):
+    def create_todo_task(self, user_email, title, content, list_name=None, due_date=None, message_id=None):
         """
         Creates a new task in Microsoft To Do.
         
@@ -236,6 +236,7 @@ class GraphClient:
             content: The detailed description/body of the task.
             list_name: (Optional) The name of the To Do list to add this to.
             due_date: (Optional) Due date in 'YYYY-MM-DD' format.
+            message_id: (Optional) The email's message ID for idempotency checks.
             
         Returns:
             dict: The created task object from the API response.
@@ -256,12 +257,42 @@ class GraphClient:
             logger.error("Could not find a valid To Do task list.")
             return None
 
+        # --- IDEMPOTENCY CHECK ---
+        # If we have a message_id, check if a task with this ID already exists in the list.
+        if message_id:
+            logger.info(f"Checking for existing task with Message ID: {message_id}")
+            tasks_endpoint = f"{self.base_url}/users/{user_email}/todo/lists/{list_id}/tasks"
+            # We fetch top 50 recent tasks. This should cover most race conditions/retries.
+            # Filtering by body content isn't directly supported efficiently by OData on generic text,
+            # so we fetch and filter locally.
+            t_params = {"$top": 50, "$select": "id,body", "$orderby": "createdDateTime desc"}
+            try:
+                t_resp = requests.get(tasks_endpoint, headers=self._get_headers(), params=t_params)
+                t_resp.raise_for_status()
+                existing_tasks = t_resp.json().get('value', [])
+                
+                check_string = f"MessageID: {message_id}"
+                for task in existing_tasks:
+                    # Robustly check body content
+                    body_text = task.get('body', {}).get('content', '')
+                    if body_text and check_string in body_text:
+                        logger.info(f"Duplicate task found (id: {task['id']}). Skipping creation.")
+                        return task # Return existing task as if we created it
+            except Exception as e:
+                 logger.warning(f"Failed to check for duplicates (proceeding anyway): {e}")
+        # -------------------------
+
+        # Append Metadata to body for future deduplication
+        final_content = content
+        if message_id:
+             final_content += f"\n\nMetadata:\nMessageID: {message_id}"
+
         # Prepare Task Creation Payload
         endpoint = f"{self.base_url}/users/{user_email}/todo/lists/{list_id}/tasks"
         payload = {
             "title": title,
             "body": {
-                "content": content,
+                "content": final_content,
                 "contentType": "text"
             }
         }

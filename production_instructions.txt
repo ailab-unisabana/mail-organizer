@@ -62,16 +62,6 @@ In the "Variables & Secrets" tab during creation (or "Edit & Deploy New Revision
     *   `GOOGLE_API_KEY`
     *   `CLIENT_STATE`
 
-**(Recommended) Option B: Using Google Secret Manager**
-      --set-env-vars="GOOGLE_API_KEY=..." \
-      --set-env-vars="CLIENT_STATE=CreateARandomStringHereForSecurity"
-    ```
-
-    *Security Note*: The `CLIENT_STATE` variable is a shared secret between your app and Microsoft Graph. It ensures that incoming webhook requests actually come from Microsoft and not a malicious actor.
-
-      --set-env-vars="GOOGLE_API_KEY=..." \
-      --set-env-vars="CLIENT_STATE=CreateARandomStringHereForSecurity"
-    ```
 
     **(Recommended) Option B: Using Google Secret Manager**
     Instead of passing secrets in plain text (as above), use Secret Manager:

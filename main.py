@@ -121,7 +121,7 @@ def process_emails(client, llm, config, target_email, specific_message_id=None):
             # If the email was categorized to "Reader/DIA", we try to put the task in a "DIA" list.
             list_name = folder_name.split('/')[-1] if folder_name else None
             
-            client.create_todo_task(target_email, title, content, list_name=list_name, due_date=due_date)
+            client.create_todo_task(target_email, title, content, list_name=list_name, due_date=due_date, message_id=message_id)
 
 import uvicorn
 import threading

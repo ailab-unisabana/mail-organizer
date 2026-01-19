@@ -17,7 +17,7 @@
     },
     {
       "name": "Social",
-      "description": "Correos electrónicos relacionados con redes sociales como LinkedIn, Facebook, Twitter, etc.",
+      "description": "Correos electrónicos relacionados con redes sociales como LinkedIn, Facebook, Twitter, etc. Todos los mensajes procedentes de LinkedIn deben ser asociados a esta categoría. Estos mensajes *nunca* generan tareas.",
       "folder_name": "Reader/Social"
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "name": "Quarantine",
-      "description": "Estos son los correos enviados por el servicio de cuarentena de Outlook que notifican que algunos mensajes han sido bloqueados y puestos en cuarentena.",
+      "description": "Estos son los correos enviados por el servicio de cuarentena de Outlook que notifican que algunos mensajes han sido bloqueados y puestos en cuarentena. Los mensajes de cuarentena *nunca* generan tareas.",
       "folder_name": "Reader/Quarantine"
     }
   ],
