@@ -405,7 +405,9 @@ class GraphClient:
         Extends the expiration time of an existing subscription by another 2 days.
         """
         endpoint = f"{self.base_url}/subscriptions/{subscription_id}"
-        expiration = (datetime.datetime.utcnow() + datetime.timedelta(days=2)).isoformat() + "Z"
+        # Use simple ISO format without microseconds to ensure Graph API acceptance/compatibility.
+        # Format: YYYY-MM-DDTHH:MM:SSZ
+        expiration = (datetime.datetime.utcnow() + datetime.timedelta(days=2)).replace(microsecond=0).isoformat() + "Z"
         
         payload = {
             "expirationDateTime": expiration
@@ -418,6 +420,9 @@ class GraphClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             logger.error(f"Error renewing subscription {subscription_id}: {e}")
+            if e.response is not None:
+                # Critical: Log the actual error explanation from Microsoft
+                logger.error(f"Response: {e.response.text}")
             return None
 
     def renew_all_subscriptions(self):
