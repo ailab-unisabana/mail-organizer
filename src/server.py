@@ -133,7 +133,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         return Response(status_code=500)
 
 @app.post("/renew")
-async def renew_subscriptions(request: Request):
+def renew_subscriptions(request: Request):
     """
     Endpoint for Cloud Scheduler (or Cron) to trigger renewal of active subscriptions.
     Secured by checking the same CLIENT_STATE as a query parameter.
@@ -155,7 +155,7 @@ async def renew_subscriptions(request: Request):
     return {"status": "success", "renewed": count}
 
 @app.post("/subscribe")
-async def manual_subscribe(request: Request):
+def manual_subscribe(request: Request):
     """
     Emergency endpoint to manually trigger a subscription creation.
     Useful if startup subscription failed.
